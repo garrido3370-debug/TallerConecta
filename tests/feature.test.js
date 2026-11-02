@@ -1,0 +1,27 @@
+const {test,after}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const os=require('node:os');
+const path=require('node:path');
+const {createApp}=require('../server');
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'tallerconecta-'));
+const dataFile=path.join(dir,'solicitudes.json');
+let server=createApp({dataFile});
+const start=s=>new Promise(resolve=>s.listen(0,'127.0.0.1',resolve));
+const close=s=>new Promise(resolve=>s.close(resolve));
+const api=async(route,options)=>{const res=await fetch(`http://127.0.0.1:${server.address().port}${route}`,options);return {status:res.status,body:await res.json()};};
+const post=(data)=>({method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
+after(async()=>{await close(server);fs.rmSync(dir,{recursive:true,force:true});});
+test('CA1 CA3 CA4 CA5: crear, resolver, bloquear segunda decisión, validar y persistir',async()=>{
+  await start(server);
+  let r=await api('/api/solicitudes',post({matricula:'1234 ABC',descripcion:'Sustitución de frenos delanteros',precioCent:8990}));
+  assert.equal(r.status,201);assert.equal(r.body.estado,'pendiente');assert.match(r.body.id,/^[a-f0-9]{40}$/);
+  const id=r.body.id;
+  r=await api('/api/cliente/'+id);assert.equal(r.status,200);assert.equal(r.body.precioCent,8990);assert.equal(r.body.descripcion,'Sustitución de frenos delanteros');
+  r=await api('/api/cliente/'+id+'/decision',post({estado:'aprobado'}));assert.equal(r.status,200);assert.equal(r.body.estado,'aprobado');assert.match(r.body.decididoEn,/Z$/);
+  r=await api('/api/cliente/'+id+'/decision',post({estado:'rechazado'}));assert.equal(r.status,409);
+  r=await api('/api/cliente/'+id);assert.equal(r.body.estado,'aprobado');
+  r=await api('/api/solicitudes',post({matricula:'!',descripcion:'corta',precioCent:-4}));assert.equal(r.status,400);
+  await close(server);server=createApp({dataFile});await start(server);
+  r=await api('/api/cliente/'+id);assert.equal(r.status,200);assert.equal(r.body.estado,'aprobado');
+});

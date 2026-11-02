@@ -1,0 +1,8 @@
+{
+  "name": "tallerconecta-clase-2",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MVP de autorización digital de presupuestos para un taller",
+  "scripts": {"start": "node server.js", "test": "node --test tests/*.test.js"},
+  "engines": {"node": ">=20"}
+}
